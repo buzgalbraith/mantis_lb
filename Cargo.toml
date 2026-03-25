@@ -1,0 +1,9 @@
+[package]
+name = "mantis_lb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.0", features = ["derive"] }
+sourmash = "0.21.0" 
+needletail = "0.6.3"
