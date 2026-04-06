@@ -4,6 +4,7 @@ use sourmash::encodings::HashFunctions;
 use sourmash::prelude::ToWriter;
 use sourmash::{signature::SigsTrait, sketch::minhash::KmerMinHash};
 use std::fs;
+use std::collections::HashMap;
 
 // wrapper for sketching an entire fastQ file
 pub fn sketch_file(path: &str, scaled: u32, ksize: u32, seed: Option<u64>) -> KmerMinHash {
@@ -101,14 +102,13 @@ pub fn make_initial_sketch(
     scaled: u32,
     ksize: u32,
     sig_dir: &str,
-) -> Vec<(u64, KmerMinHash)> {
-    let mut sketches: Vec<(u64, KmerMinHash)> = Vec::new();
+) -> Vec<KmerMinHash> {
+    let mut sketches: Vec<KmerMinHash> = Vec::new();
     for _ in 0..n {
         let seed: u64 = random();
-        sketches.push((
-            seed,
-            KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, seed, false, 0),
-        ));
+        sketches.push(
+            KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, seed, false, 0)
+        );
     }
     let paths = fs::read_dir(fastq_dir).unwrap();
     for (i, path) in paths.enumerate() {
@@ -120,21 +120,67 @@ pub fn make_initial_sketch(
                 path.to_str().expect("missing_path"),
                 scaled,
                 ksize,
-                Some(sketches[idx].0),
+                Some(sketches[idx].seed()),
             );
-            sketches[idx].1.merge(&file_sketch).unwrap();
+            sketches[idx].merge(&file_sketch).unwrap();
         }
     }
     fs::create_dir_all(sig_dir).expect("could not create sig dir");
     // write out results
-    for i in 0..n {
+    for (i, sketch) in sketches.iter().enumerate(){
         write_sketch(
             format!("{sig_dir}/cluster_sketch_{}.sig", i).as_str(),
-            &sketches[i as usize].1,
+            sketch,
         );
     }
     sketches
 }
+
+pub fn write_sketches_to_dir(sketches: &Vec<KmerMinHash>, dir: &str) {
+    fs::create_dir_all(dir).expect("could not create dir");
+    for (i, sketch) in sketches.iter().enumerate() {
+        write_sketch(
+            &format!("{dir}/cluster_sketch_{}.sig", i),
+            sketch,
+        );
+    }
+}
+
+pub fn run_round_robin(
+    incoming_dir: &str,
+    mut cluster_sketches: Vec<KmerMinHash>,
+    scaled: u32,
+    ksize: u32,
+    final_sig_dir: &str,
+) -> HashMap<String, usize> {
+    let n = cluster_sketches.len();
+    let mut assignments: HashMap<String, usize> = HashMap::new();
+
+    let mut paths: Vec<_> = fs::read_dir(incoming_dir).unwrap().filter_map(|p| {
+        let path = p.unwrap().path();
+        let ext = path.extension().and_then(|e| e.to_str()).map(str::to_owned);
+        if ext.as_deref() == Some("fastq") || ext.as_deref() == Some("fastq.gz"){
+            Some(path)
+        } else{
+            None
+        }
+    }).collect();
+
+    paths.sort();
+
+    for(i, path) in paths.iter().enumerate() {
+        let idx = i % n;
+        let seed = cluster_sketches[idx].seed();
+        let sketch = sketch_file(path.to_str().unwrap(), scaled, ksize, Some(seed));
+        cluster_sketches[idx].merge(&sketch).unwrap();
+        let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+        assignments.insert(filename, idx);
+    }
+    write_sketches_to_dir(&cluster_sketches, final_sig_dir);
+    assignments
+}
+
+
 
 pub fn select_most_similar_sketch(
     sketches: &Vec<KmerMinHash>,
@@ -160,6 +206,82 @@ pub fn select_most_similar_sketch(
     most_similar
 }
 
+pub fn run_similarity(
+    incoming_dir: &str,
+    mut cluster_sketches: Vec<KmerMinHash>,
+    scaled: u32,
+    ksize: u32,
+    final_sig_dir: &str,
+) -> HashMap<String, usize> {
+    let mut assignments: HashMap<String, usize> = HashMap::new();
+
+    let paths: Vec<_> = fs::read_dir(incoming_dir).unwrap().filter_map(|p|{
+        let path = p.unwrap().path();
+        let ext = path.extension().and_then(|e| e.to_str()).map(str::to_owned);
+        if ext.as_deref() == Some("fastq") || ext.as_deref() == Some("fastq.gz"){
+            Some(path)
+        }else{
+            None
+        }
+    }).collect();
+
+    for path in paths.iter(){
+        let(best_idx, _, sketch) = select_most_similar_sketch(
+            &cluster_sketches, 
+            path.to_str().unwrap(),
+            scaled,
+            ksize
+        );
+        cluster_sketches[best_idx].merge(&sketch).unwrap();
+        let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+        assignments.insert(filename, best_idx);
+    }
+    write_sketches_to_dir(&cluster_sketches, final_sig_dir);
+    assignments
+}
+
+pub fn write_assignments(path: &str, assignments: &HashMap<String, usize>) {
+    use std::io::Write;
+
+    let mut entries: Vec<_> = assignments.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut file = fs::File::create(path).unwrap();
+    writeln!(file, "filename, cluster").unwrap();
+    for(filename, cluster) in &entries {
+        writeln!(file, "{},{}", filename, cluster).unwrap();
+    }
+}
+
+pub fn write_results(
+    path: &str,
+    round_robin: &HashMap<String, usize>,
+    similarity: &HashMap<String, usize>,
+    n: usize,
+){
+    use std::io::Write;
+
+    let mut rr_counts = vec![0usize; n];
+    for cluster in round_robin.values(){
+        rr_counts[*cluster] += 1;
+    }
+
+    let mut sim_counts = vec![0usize; n];
+    for cluster in similarity.values() {
+        sim_counts[*cluster] += 1;
+    }
+
+    let mut file = fs::File::create(path).unwrap();
+    writeln!(file, "strategy, cluster, file_count").unwrap();
+    for (i, count) in rr_counts.iter().enumerate(){
+        writeln!(file, "round_robin,{},{}", i, count).unwrap();
+    }
+    for (i, count) in sim_counts.iter().enumerate() {
+        writeln!(file, "similarity,{},{}", i, count).unwrap();
+    }
+}
+
+/*
 pub fn load_ballance_new_fastq_files(
     fastq_dir: &str,
     n: u32,
@@ -187,3 +309,5 @@ pub fn load_ballance_new_fastq_files(
         );
     }
 }
+*/
+
