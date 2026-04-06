@@ -117,9 +117,8 @@ fn main() {
             ksize,
         } => {
             println!("Reading from {a}\nSketching with SourMash!", a = fastq_dir);
-            let seed: u64 = random();
-            let sketches = sketch_dir_files(&fastq_dir, scaled, ksize, Some(seed));
-            let merged = merge_sketches(&sketches, scaled, ksize, seed);
+            let sketches = sketch_dir_files(&fastq_dir, scaled, ksize);
+            let merged = merge_sketches(&sketches, scaled, ksize);
             let filename = "merged.sig";
             println!("Merged sketch contains {} hashes", merged.size());
             write_sketch(filename, &merged);

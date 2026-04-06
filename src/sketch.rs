@@ -6,14 +6,14 @@ use sourmash::{signature::SigsTrait, sketch::minhash::KmerMinHash};
 use std::fs;
 use std::collections::HashMap;
 
+const testing_seed : u64 = 101;
 // wrapper for sketching an entire fastQ file
-pub fn sketch_file(path: &str, scaled: u32, ksize: u32, seed: Option<u64>) -> KmerMinHash {
-    let seed = seed.unwrap_or(random());
+pub fn sketch_file(path: &str, scaled: u32, ksize: u32) -> KmerMinHash {
     let mut mh: KmerMinHash = KmerMinHash::new(
         scaled, // scaled size
         ksize,  // k-mer size
         HashFunctions::Murmur64Dna,
-        seed,
+        testing_seed,
         false, // track abundance
         0,     // if 0 use scaled
     );
@@ -34,7 +34,6 @@ pub fn sketch_dir_files(
     fastq_dir: &str,
     scaled: u32,
     ksize: u32,
-    seed: Option<u64>,
 ) -> Vec<KmerMinHash> {
     let paths = fs::read_dir(fastq_dir).unwrap();
     let mut sketches: Vec<KmerMinHash> = Vec::new();
@@ -46,7 +45,6 @@ pub fn sketch_dir_files(
                 path.to_str().expect("missing_path"),
                 scaled,
                 ksize,
-                seed,
             ));
         }
     }
@@ -58,11 +56,9 @@ pub fn merge_sketches(
     sketches: &Vec<KmerMinHash>,
     scaled: u32,
     ksize: u32,
-    seed: u64,
 ) -> KmerMinHash {
-    // seed must be provided and match the merge
     let mut merged: KmerMinHash =
-        KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, seed, false, 0);
+        KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, testing_seed, false, 0);
     for sketch in sketches {
         merged.merge(sketch).expect("error");
     }
@@ -105,9 +101,8 @@ pub fn make_initial_sketch(
 ) -> Vec<KmerMinHash> {
     let mut sketches: Vec<KmerMinHash> = Vec::new();
     for _ in 0..n {
-        let seed: u64 = random();
         sketches.push(
-            KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, seed, false, 0)
+            KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, testing_seed, false, 0)
         );
     }
     let paths = fs::read_dir(fastq_dir).unwrap();
@@ -120,7 +115,6 @@ pub fn make_initial_sketch(
                 path.to_str().expect("missing_path"),
                 scaled,
                 ksize,
-                Some(sketches[idx].seed()),
             );
             sketches[idx].merge(&file_sketch).unwrap();
         }
@@ -170,8 +164,7 @@ pub fn run_round_robin(
 
     for(i, path) in paths.iter().enumerate() {
         let idx = i % n;
-        let seed = cluster_sketches[idx].seed();
-        let sketch = sketch_file(path.to_str().unwrap(), scaled, ksize, Some(seed));
+        let sketch = sketch_file(path.to_str().unwrap(), scaled, ksize);
         cluster_sketches[idx].merge(&sketch).unwrap();
         let filename = path.file_name().unwrap().to_str().unwrap().to_string();
         assignments.insert(filename, idx);
@@ -194,12 +187,11 @@ pub fn select_most_similar_sketch(
         0.00,
         KmerMinHash::new(0, 0, HashFunctions::Murmur64Dna, 0, false, 0),
     );
+    let new_sketch: KmerMinHash = sketch_file(fastq_file_path, scaled, ksize,);
     for (i, sketch) in sketches.iter().enumerate() {
-        // use seed of current sketch //
-        let new_sketch = sketch_file(fastq_file_path, scaled, ksize, Some(sketch.seed()));
         let cur_sim = new_sketch.similarity(sketch, false, false).expect("error");
         if cur_sim > most_similar.1 {
-            most_similar = (i, cur_sim, new_sketch);
+            most_similar = (i, cur_sim, new_sketch.clone());
         }
         println!("Cluster {i} has sim {cur_sim}")
     }
