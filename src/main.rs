@@ -33,7 +33,7 @@ enum Command {
     BuildIndex {
         #[arg(long, default_value_t=String::from("fastq_files"), short='d')]
         fastq_dir: String,
-        #[arg(long, default_value_t=String::from("initial_index") )]
+        #[arg(long, default_value_t=String::from("initial_index"), short = 'o' )]
         sig_dir: String,
         #[arg(long, default_value_t = 5, short = 'n')]
         num_index: u32,
