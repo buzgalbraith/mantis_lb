@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=run_experiment      # Job name
-#SBATCH --output=./outputs/%x-%j.out    # Standard output file
-#SBATCH --error=./outputs/%x-%j.err    # Standard error file
+#SBATCH --output=./logs/%x-%j.out    # Standard output file
+#SBATCH --error=./logs/%x-%j.err    # Standard error file
 #SBATCH --partition=short     # Partition/queue name
 #SBATCH --nodes=1              # Number of nodes/machines 
 #SBATCH --ntasks=1             # Number of tasks/separate processes
