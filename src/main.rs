@@ -1,7 +1,6 @@
 mod sketch;
 
 use clap::{Parser, Subcommand};
-use rand::random;
 use sketch::{
     compare_sketches, make_initial_sketch, merge_sketches, read_sketch, read_sketches_from_dir,
     select_most_similar_sketch, sketch_dir_files, write_sketch,
@@ -75,8 +74,8 @@ enum Command {
         scaled: u32,
         #[arg(long, default_value_t = 21, short = 'k')]
         ksize: u32,
-        #[arg(long, default_value_t = 5, short = 'n')]
-        num_index: u32,
+        #[arg(long, default_value_t = false, short = 'm')]
+        make_sketch: bool,
     },
     RunSimilarity {
         #[arg(long, default_value_t=String::from("incoming_fastq"), short='d')]
@@ -89,8 +88,6 @@ enum Command {
         scaled: u32,
         #[arg(long, default_value_t = 21, short = 'k')]
         ksize: u32,
-        #[arg(long, default_value_t = 5, short = 'n')]
-        num_index: u32,
     },
     RunExperiment {
         #[arg(long, default_value_t=String::from("incoming_fastq"), short='d')]
@@ -105,6 +102,8 @@ enum Command {
         ksize: u32,
         #[arg(long, default_value_t = 5, short = 'n')]
         num_index: u32,
+        #[arg(long, default_value_t = false, short = 'm')]
+        make_sketch: bool,
     },
 }
 
@@ -165,17 +164,17 @@ fn main() {
             load_ballance_new_fastq_files(&fastq_dir, num_index, scaled, ksize, &sig_dir);
         }*/
         Command::RunRoundRobin {
-            incoming_dir, sig_dir, output, scaled, ksize, num_index,
+            incoming_dir, sig_dir, output, scaled, ksize, make_sketch,
         } => {
             println!("Running round robin from {incoming_dir}");
             let sketches = read_sketches_from_dir(&sig_dir);
-            let assignments = run_round_robin(&incoming_dir, sketches, scaled, ksize, &format!("{output}/rr_final_sketches"));
+            let assignments = run_round_robin(&incoming_dir, make_sketch, sketches, scaled, ksize, &format!("{output}/rr_final_sketches"));
             write_assignments(&output, &assignments);
             println!("Done. Assignments written to {output}");
         }
 
         Command::RunSimilarity {
-            incoming_dir, sig_dir, output, scaled, ksize, num_index,
+            incoming_dir, sig_dir, output, scaled, ksize,
         } => {
             println!("Running similarity assignment from {incoming_dir}");
             let sketches = read_sketches_from_dir(&sig_dir);
@@ -185,14 +184,14 @@ fn main() {
         }
 
         Command::RunExperiment {
-            incoming_dir, sig_dir, output_dir, scaled, ksize, num_index,
+            incoming_dir, sig_dir, output_dir, scaled, ksize, num_index, make_sketch,
         } => {
             println!("Running full experiment from {incoming_dir}");
             // read twice from disk — avoids cloning large sketch data
             let rr_sketches = read_sketches_from_dir(&sig_dir);
             let sim_sketches = read_sketches_from_dir(&sig_dir);
 
-            let rr_assignments = run_round_robin(&incoming_dir, rr_sketches, scaled, ksize, &format!("{output_dir}/rr_final_sketches"));
+            let rr_assignments = run_round_robin(&incoming_dir, make_sketch, rr_sketches, scaled, ksize, &format!("{output_dir}/rr_final_sketches"));
             let sim_assignments = run_similarity(&incoming_dir, sim_sketches, scaled, ksize, &format!("{output_dir}/sim_final_sketches"));
 
             fs::create_dir_all(&output_dir).unwrap();

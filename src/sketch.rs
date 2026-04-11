@@ -1,19 +1,18 @@
 use needletail::{Sequence, parse_fastx_file};
-use rand::random;
 use sourmash::encodings::HashFunctions;
 use sourmash::prelude::ToWriter;
 use sourmash::{signature::SigsTrait, sketch::minhash::KmerMinHash};
 use std::fs;
 use std::collections::HashMap;
 
-const testing_seed : u64 = 101;
+const TESTING_SEED : u64 = 101;
 // wrapper for sketching an entire fastQ file
 pub fn sketch_file(path: &str, scaled: u32, ksize: u32) -> KmerMinHash {
     let mut mh: KmerMinHash = KmerMinHash::new(
         scaled, // scaled size
         ksize,  // k-mer size
         HashFunctions::Murmur64Dna,
-        testing_seed,
+        TESTING_SEED,
         false, // track abundance
         0,     // if 0 use scaled
     );
@@ -58,7 +57,7 @@ pub fn merge_sketches(
     ksize: u32,
 ) -> KmerMinHash {
     let mut merged: KmerMinHash =
-        KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, testing_seed, false, 0);
+        KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, TESTING_SEED, false, 0);
     for sketch in sketches {
         merged.merge(sketch).expect("error");
     }
@@ -102,7 +101,7 @@ pub fn make_initial_sketch(
     let mut sketches: Vec<KmerMinHash> = Vec::new();
     for _ in 0..n {
         sketches.push(
-            KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, testing_seed, false, 0)
+            KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, TESTING_SEED, false, 0)
         );
     }
     let paths = fs::read_dir(fastq_dir).unwrap();
@@ -142,6 +141,7 @@ pub fn write_sketches_to_dir(sketches: &Vec<KmerMinHash>, dir: &str) {
 
 pub fn run_round_robin(
     incoming_dir: &str,
+    make_sketch: bool, 
     mut cluster_sketches: Vec<KmerMinHash>,
     scaled: u32,
     ksize: u32,
@@ -164,12 +164,16 @@ pub fn run_round_robin(
 
     for(i, path) in paths.iter().enumerate() {
         let idx = i % n;
-        let sketch = sketch_file(path.to_str().unwrap(), scaled, ksize);
-        cluster_sketches[idx].merge(&sketch).unwrap();
         let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+        if make_sketch{
+            let sketch = sketch_file(path.to_str().unwrap(), scaled, ksize);
+            cluster_sketches[idx].merge(&sketch).unwrap();
+        }
         assignments.insert(filename, idx);
     }
-    write_sketches_to_dir(&cluster_sketches, final_sig_dir);
+    if make_sketch{
+        write_sketches_to_dir(&cluster_sketches, final_sig_dir);
+    }
     assignments
 }
 
