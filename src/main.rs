@@ -68,7 +68,7 @@ enum Command {
         incoming_dir: String,
         #[arg(long, default_value_t=String::from("initial_index"), short='e')]
         sig_dir: String,
-        #[arg(long, default_value_t=String::from("results/round_robin_assignments.csv"), short='o')]
+        #[arg(long, default_value_t=String::from("results/round_robin_sketches"), short='o')]
         output: String,
         #[arg(long, default_value_t = 1000, short = 's')]
         scaled: u32,
@@ -82,7 +82,7 @@ enum Command {
         incoming_dir: String,
         #[arg(long, default_value_t=String::from("initial_index"), short='e')]
         sig_dir: String,
-        #[arg(long, default_value_t=String::from("results/similarity_assignments.csv"), short='o')]
+        #[arg(long, default_value_t=String::from("results/sim_final_sketches"), short='o')]
         output: String,
         #[arg(long, default_value_t = 1000, short = 's')]
         scaled: u32,
@@ -168,8 +168,8 @@ fn main() {
         } => {
             println!("Running round robin from {incoming_dir}");
             let sketches = read_sketches_from_dir(&sig_dir);
-            let assignments = run_round_robin(&incoming_dir, make_sketch, sketches, scaled, ksize, &format!("{output}/rr_final_sketches"));
-            write_assignments(&output, &assignments);
+            let assignments = run_round_robin(&incoming_dir, make_sketch, sketches, scaled, ksize, &output);
+            write_assignments(&format!("{output}/round_robin_assignments.csv"), &assignments);
             println!("Done. Assignments written to {output}");
         }
 
@@ -178,8 +178,8 @@ fn main() {
         } => {
             println!("Running similarity assignment from {incoming_dir}");
             let sketches = read_sketches_from_dir(&sig_dir);
-            let assignments = run_similarity(&incoming_dir, sketches, scaled, ksize, &format!("{output}/sim_final_sketches"));
-            write_assignments(&output, &assignments);
+            let assignments = run_similarity(&incoming_dir, sketches, scaled, ksize,&output);
+            write_assignments(&format!("{output}/similarity_assignments.csv"), &assignments);
             println!("Done. Assignments written to {output}");
         }
 

@@ -130,6 +130,7 @@ pub fn make_initial_sketch(
 }
 
 pub fn write_sketches_to_dir(sketches: &Vec<KmerMinHash>, dir: &str) {
+    println!("{dir}");
     fs::create_dir_all(dir).expect("could not create dir");
     for (i, sketch) in sketches.iter().enumerate() {
         write_sketch(
@@ -173,6 +174,9 @@ pub fn run_round_robin(
     }
     if make_sketch{
         write_sketches_to_dir(&cluster_sketches, final_sig_dir);
+    }
+    else{
+        fs::create_dir_all(final_sig_dir).expect("could not create dir");
     }
     assignments
 }
