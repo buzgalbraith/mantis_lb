@@ -16,7 +16,7 @@ module load Boost/1.88.0
 export n=5 ## number of clusters ##
 export cluster_assignment_file="/scratch/w.galbraith/CS7800_group_4/mantis/sra_data/toy_example_files/toy_cluster_assignment.csv" ## csv file with cluster assignment ## 
 export kmer_size=28
-export slots=20
+export slots=31
 export write_dir="./mantis_output/"
 export squeakr_dir="./mantis_output/squeakr_files"
 export threads=32 ## make sure this matches the resource request#
@@ -25,7 +25,7 @@ export threads=32 ## make sure this matches the resource request#
 export MANTIS_BIN="/scratch/w.galbraith/CS7800_group_4/mantis/bin/mantis"
 ## run method ##
 # ## get a list of squakr files from a dir, we may want to change this later ## 
-for i in $(seq 1 $n); do
+for i in $(seq 0 $n); do
 	echo "Building cluster ${i} index"
 	## get list of squawker files ## 
 	export index_dir="${write_dir}/cluster_${i}_index"
