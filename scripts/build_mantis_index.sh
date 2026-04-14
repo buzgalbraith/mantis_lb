@@ -7,12 +7,14 @@
 #SBATCH --ntasks=1             # Number of tasks/separate processes
 #SBATCH --cpus-per-task=32      # CPU cores per task
 #SBATCH --mem=64G               # amount of ram
-#SBATCH --time=04:00:00        # Time limit hrs:min:sec
+#SBATCH --time=12:00:00        # Time limit hrs:min:sec
+#SBATCH --array=0-4
 
 ## load modules ##
 module purge
 module load Boost/1.88.0
 ## run vars ##
+i=$SLURM_ARRAY_TASK_ID
 export n=5 ## number of clusters ##
 export cluster_assignment_file="/scratch/w.galbraith/CS7800_group_4/mantis/sra_data/toy_example_files/toy_cluster_assignment.csv" ## csv file with cluster assignment ## 
 export kmer_size=28

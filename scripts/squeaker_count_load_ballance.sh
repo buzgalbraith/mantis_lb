@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=build_squakr      # Job name
+#SBATCH --job-name=build_squakr_load_balance     # Job name
 #SBATCH --output=./logs/%x-%j.out    # Standard output file
 #SBATCH --error=./logs/%x-%j.err    # Standard error file
-#SBATCH --partition=sharing     # Partition/queue name
+#SBATCH --partition=short     # Partition/queue name
 #SBATCH --nodes=1              # Number of nodes/machines
 #SBATCH --ntasks=1             # Number of tasks/separate processes
 #SBATCH --cpus-per-task=16      # CPU cores per task
 #SBATCH --mem=32G               # amount of ram
-#SBATCH --time=01:00:00        # Time limit hrs:min:sec
+#SBATCH --time=05:00:00        # Time limit hrs:min:sec
 
 ## load modules ##
 module purge
@@ -15,8 +15,8 @@ module load Boost/1.88.0
 ## run vars ##
 export kmer_size=28
 export slots=31
-export write_dir="./mantis_output"
-export fastq_dir="/scratch/w.galbraith/CS7800_group_4/mantis/sra_data/toy_example_files" ## dir with input fastqs ##
+export write_dir="/scratch/w.galbraith/CS7800_group_4/mantis/mantis_output"
+export fastq_dir="/scratch/w.galbraith/CS7800_group_4/mantis/sra_data/to_squeak_2" ## dir with input fastqs ##
 export threads=16 ## make sure this matches the sbatch config
 
 ## bins/lib paths ##
