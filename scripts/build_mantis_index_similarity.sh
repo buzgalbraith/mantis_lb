@@ -19,7 +19,7 @@ export cluster_assignment_file="/scratch/pathak.shr/similarity_assignments.csv"
 export kmer_size=28
 export slots=31
 export write_dir="/scratch/w.galbraith/CS7800_group_4/mantis/mantis_output/similarity_index"
-export squeakr_dir="/scratch/w.galbraith/CS7800_group_4/mantis/mantis_output/squeakr_files/"
+export squeakr_dir="/scratch/w.galbraith/CS7800_group_4/mantis/mantis_output/squeakr_files"
 export threads=32
 
 ## bins/lib paths ##
