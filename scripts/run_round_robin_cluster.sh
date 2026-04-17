@@ -7,13 +7,21 @@
 #SBATCH --ntasks=1             # Number of tasks/separate processes
 #SBATCH --cpus-per-task=16      # CPU cores per task 
 #SBATCH --mem=32G               # amount of ram 
-#SBATCH --time=02:00:00        # Time limit hrs:min:sec
+#SBATCH --time=12:00:00        # Time limit hrs:min:sec
+
+## run args ##
+export fastq_dir="/scratch/w.galbraith/CS7800_group_4/mantis/sra_data/load_ballance_fastq_files"
+export initial_index_dir="/scratch/w.galbraith/CS7800_group_4/mantis/report_output/sketches/initial_index"
+export write_dir="/scratch/w.galbraith/CS7800_group_4/mantis/report_output/sketches/round_robin_index"
+export n_clusters=5
+export kmer_size=28
+export scaled_num=1000
 
 ## run the method ## 
 cargo run --release \
         -- run-round-robin \
-        -d /scratch/w.galbraith/CS7800_group_4/mantis/sra_data/toy_example_files \
-        -e ./initial_index \
-        -o ./sketches/round_robin_sketches \
-        -s 1000 \
-        -k 21
+        -d $fastq_dir \
+        -e $initial_index_dir \
+        -o $write_dir \
+        -s $scaled_num \
+        -k $kmer_size
