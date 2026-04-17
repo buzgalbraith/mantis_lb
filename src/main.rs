@@ -5,6 +5,7 @@ use sketch::{
     compare_sketches, make_initial_sketch, merge_sketches, read_sketch, read_sketches_from_dir,
     select_most_similar_sketch, sketch_dir_files, write_sketch,
     run_round_robin, run_similarity, write_assignments, write_results,
+    validate_fastq_dir
 };
 use std::fs;
 use sourmash::signature::SigsTrait;
@@ -50,19 +51,6 @@ enum Command {
         #[arg(long, default_value_t = 21, short = 'k')]
         ksize: u32,
     },
-    /*
-    LoadBallanceNewFastQ {
-        #[arg(long, default_value_t=String::from("fastq_files"), short='d')]
-        fastq_dir: String,
-        #[arg(long, default_value_t=String::from("initial_index"), short='e')]
-        sig_dir: String,
-        #[arg(long, default_value_t = 1000, short = 's')]
-        scaled: u32,
-        #[arg(long, default_value_t = 21, short = 'k')]
-        ksize: u32,
-        #[arg(long, default_value_t = 5, short = 'n')]
-        num_index: u32,
-    },*/
     RunRoundRobin{
         #[arg(long, default_value_t=String::from("incoming_fastq"), short='d')]
         incoming_dir: String,
@@ -86,6 +74,12 @@ enum Command {
         output: String,
         #[arg(long, default_value_t = 1000, short = 's')]
         scaled: u32,
+        #[arg(long, default_value_t = 21, short = 'k')]
+        ksize: u32,
+    },
+    ValidateFastqDir {
+        #[arg(long, default_value_t=String::from("fastq_files"), short='d')]
+        fastq_dir: String,
         #[arg(long, default_value_t = 21, short = 'k')]
         ksize: u32,
     },
@@ -153,16 +147,11 @@ fn main() {
                 most_similar_sketch.0, most_similar_sketch.1
             );
         }
-        /*
-        Command::LoadBallanceNewFastQ {
-            fastq_dir,
-            sig_dir,
-            scaled,
-            ksize,
-            num_index,
-        } => {
-            load_ballance_new_fastq_files(&fastq_dir, num_index, scaled, ksize, &sig_dir);
-        }*/
+        Command::ValidateFastqDir { fastq_dir, ksize } => {
+            println!("Checking {fastq_dir} for invalid fastq files");
+            println!("The following files are invalid at k-mer length {}:", ksize);
+            validate_fastq_dir(&fastq_dir, ksize);
+        }
         Command::RunRoundRobin {
             incoming_dir, sig_dir, output, scaled, ksize, make_sketch,
         } => {

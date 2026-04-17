@@ -49,6 +49,44 @@ pub fn sketch_dir_files(
     }
     sketches
 }
+// checks that a fastq file is not fully ambigious and has at least one read of the correct length
+pub fn check_valid_fastq(path: &str, ksize: u32) -> bool {
+    let mut reader = parse_fastx_file(path).expect("valid path/file");
+    while let Some(record) = reader.next() {
+        let seqrec = record.expect("invalid record");
+        let norm_seq = seqrec.normalize(false);
+        let has_valid_kmer = norm_seq.len() >= ksize as usize
+            && norm_seq
+                .windows(ksize as usize)
+                .any(|kmer| !kmer.contains(&b'N') && !kmer.contains(&b'n'));
+        if has_valid_kmer {
+            return true; // at least one valid line
+        }
+    }
+    false // no valid lines
+}
+// check if all fatq files in a dir are valid
+pub fn validate_fastq_dir(
+    fastq_dir: &str,
+    ksize: u32,
+) {
+    let paths = fs::read_dir(fastq_dir).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext == Some("fastq") || ext == Some("fastq.gz") {
+            let is_valid = check_valid_fastq(
+                path.to_str().expect("missing_path"),
+                ksize,
+            );
+            // print out any paths that are found to be invalid
+            if !is_valid {
+                println!("{}", path.to_str().expect("missing_path"));
+            }
+        }
+    }
+    
+}
 
 // merge a vector of sketches into a single representation
 pub fn merge_sketches(
@@ -193,13 +231,13 @@ pub fn select_most_similar_sketch(
     let mut most_similar: (usize, f64, KmerMinHash) = (
         0,
         0.00,
-        KmerMinHash::new(0, 0, HashFunctions::Murmur64Dna, 0, false, 0),
+        sketch_file(fastq_file_path, scaled, ksize,),
     );
-    let new_sketch: KmerMinHash = sketch_file(fastq_file_path, scaled, ksize,);
     for (i, sketch) in sketches.iter().enumerate() {
-        let cur_sim = new_sketch.similarity(sketch, false, false).expect("error");
+        let cur_sim = most_similar.2.similarity(sketch, false, false).expect("error");
         if cur_sim > most_similar.1 {
-            most_similar = (i, cur_sim, new_sketch.clone());
+            most_similar.0 = i;
+            most_similar.1 = cur_sim;
         }
         println!("Cluster {i} has sim {cur_sim}")
     }
@@ -280,34 +318,3 @@ pub fn write_results(
         writeln!(file, "similarity,{},{}", i, count).unwrap();
     }
 }
-
-/*
-pub fn load_ballance_new_fastq_files(
-    fastq_dir: &str,
-    n: u32,
-    scaled: u32,
-    ksize: u32,
-    sig_dir: &str,
-) {
-    let mut sketches = read_sketches_from_dir(&sig_dir);
-    let paths = fs::read_dir(fastq_dir).unwrap();
-    for path in paths {
-        let most_similar = select_most_similar_sketch(
-            &sketches,
-            path.unwrap().path().to_str().expect("error"),
-            scaled,
-            ksize,
-        );
-        sketches[most_similar.0]
-            .merge(&most_similar.2)
-            .expect("error")
-    }
-    for i in 0..n {
-        write_sketch(
-            format!("{sig_dir}/cluster_sketch_{}.sig", i).as_str(),
-            &sketches[i as usize],
-        );
-    }
-}
-*/
-
