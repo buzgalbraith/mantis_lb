@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=build_mantis_index_similarity
+#SBATCH --job-name=build_mantis_big_test_index_round_robin_real
 #SBATCH --output=./logs/%x-%A_%a.out    # %A = array job ID, %a = task index
 #SBATCH --error=./logs/%x-%A_%a.err
 #SBATCH --partition=short     # Partition/queue name
@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1             # Number of tasks/separate processes
 #SBATCH --cpus-per-task=32      # CPU cores per task
 #SBATCH --mem=64G               # amount of ram
-#SBATCH --time=12:00:00        # Time limit hrs:min:sec
+#SBATCH --time=24:00:00        # Time limit hrs:min:sec
 #SBATCH --array=0-4
 
 ## load modules ##
@@ -15,11 +15,12 @@ module purge
 module load Boost/1.88.0
 
 ## run vars ##
-export cluster_assignment_file="/scratch/pathak.shr/similarity_assignments.csv"
+
+export cluster_assignment_file="/scratch/w.galbraith/CS7800_group_4/mantis/report_output/sketches/similarity_index/similarity_assignments.csv"
 export kmer_size=28
 export slots=31
-export write_dir="/scratch/w.galbraith/CS7800_group_4/mantis/mantis_output/similarity_index"
-export squeakr_dir="/scratch/w.galbraith/CS7800_group_4/mantis/mantis_output/squeakr_files"
+export write_dir="/scratch/w.galbraith/CS7800_group_4/mantis/report_output/indices/similarity_indices"
+export squeakr_dir="/scratch/mammadov.i/mantis_output/all_files_squeakr/squeakr_files"
 export threads=32
 
 ## bins/lib paths ##
