@@ -13,7 +13,7 @@
 export fastq_dir="/scratch/w.galbraith/CS7800_group_4/mantis/sra_data/initial_index_fastq_files"
 export write_dir="/scratch/w.galbraith/CS7800_group_4/mantis/report_output/sketches/initial_index"
 export n_clusters=5
-export kmer_size=28
+export kmer_size=20
 export scaled_num=1000
 
 ## run the method ## 
