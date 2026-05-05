@@ -5,7 +5,7 @@ use sketch::{
     compare_sketches, make_initial_sketch, merge_sketches, read_sketch, read_sketches_from_dir,
     select_most_similar_sketch, sketch_dir_files, write_sketch,
     run_round_robin, run_similarity, write_assignments, write_results,
-    validate_fastq_dir
+    validate_fastq_dir, run_asymmetrical_assignment
 };
 use std::fs;
 use sourmash::signature::SigsTrait;
@@ -76,6 +76,12 @@ enum Command {
         scaled: u32,
         #[arg(long, default_value_t = 21, short = 'k')]
         ksize: u32,
+    },
+    RunAsymmetrical {
+        #[arg(long, default_value_t=String::from("existing_assignment_file"), short='a')]
+        existing_assignment_file: String,
+        #[arg(long, default_value_t=String::from("results/weighted_final_sketches"), short='o')]
+        output: String,
     },
     ValidateFastqDir {
         #[arg(long, default_value_t=String::from("fastq_files"), short='d')]
@@ -171,7 +177,10 @@ fn main() {
             write_assignments(&format!("{output}/similarity_assignments.csv"), &assignments);
             println!("Done. Assignments written to {output}");
         }
-
+        Command::RunAsymmetrical { existing_assignment_file, output } => {
+            let assignments = run_asymmetrical_assignment(&existing_assignment_file, &output);
+            write_assignments(&format!("{output}/weighted_assignments.csv"), &assignments);
+        }
         Command::RunExperiment {
             incoming_dir, sig_dir, output_dir, scaled, ksize, num_index, make_sketch,
         } => {

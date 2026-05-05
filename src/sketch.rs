@@ -318,3 +318,60 @@ pub fn write_results(
         writeln!(file, "similarity,{},{}", i, count).unwrap();
     }
 }
+
+pub fn run_asymmetrical_assignment(
+    existing_assignment_file: &str,
+    dir: &str
+
+)-> HashMap<String, usize>{
+    use std::fs::File;
+    use std::collections::HashMap;
+    use std::io::{self, BufRead};
+    use rand::prelude::*;
+    use rand::distr::weighted::WeightedIndex;
+    fs::create_dir_all(dir).expect("could not create dir");
+    let file = File::open(existing_assignment_file);
+    let reader = io::BufReader::new(file.expect("here"));
+    let mut files: Vec<String> = Vec::new(); 
+    let mut original_assignments: Vec<u128> = Vec::new(); 
+    for (i, line) in reader.lines().enumerate() {
+            // skip the first line 
+            if i == 0 {
+                continue;
+            }
+            else{
+                let a = line.expect("here");
+                let line_val = a.split(",");
+                let lines: Vec<&str> = line_val.collect();
+                if let Some(f_name) = lines.first() {
+                    files.push(f_name.to_string());
+                }
+                if let Some(assignment) = lines.last() {
+                    let value: u128 = assignment.trim().parse().expect("not a valid number");
+                    original_assignments.push(value);
+                }
+            }
+    }
+    let mut m: HashMap<u128, usize> = HashMap::new();
+    let mut choices: Vec<u128> = Vec::new();
+    let mut weights: Vec<usize> = Vec::new(); 
+    let mut assignments: HashMap<String, usize> = HashMap::new();
+    // get count of original files for weights
+    for x in original_assignments {
+        *m.entry(x).or_default() += 1;
+    }
+    for x in m{
+        choices.push(x.0);
+        weights.push(x.1)
+    }
+    
+    // iterate over that and store the results 
+    let dist = WeightedIndex::new(&weights).unwrap();
+    let mut rng = rand::rng();
+    for path in files.iter() {
+        path.to_string();
+        let idx = choices[dist.sample(&mut rng)] as usize;
+        assignments.insert(path.to_string(), idx);
+    }
+    return  assignments;
+}
