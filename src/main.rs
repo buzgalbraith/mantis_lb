@@ -80,7 +80,7 @@ enum Command {
     RunAsymmetrical {
         #[arg(long, default_value_t=String::from("existing_assignment_file"), short='a')]
         existing_assignment_file: String,
-        #[arg(long, default_value_t=String::from("results/weighted_final_sketches"), short='o')]
+        #[arg(long, default_value_t=String::from("results/asymmetrical_final_sketches"), short='o')]
         output: String,
     },
     ValidateFastqDir {
@@ -179,7 +179,7 @@ fn main() {
         }
         Command::RunAsymmetrical { existing_assignment_file, output } => {
             let assignments = run_asymmetrical_assignment(&existing_assignment_file, &output);
-            write_assignments(&format!("{output}/weighted_assignments.csv"), &assignments);
+            write_assignments(&format!("{output}/asymmetrical_assignments.csv"), &assignments);
         }
         Command::RunExperiment {
             incoming_dir, sig_dir, output_dir, scaled, ksize, num_index, make_sketch,

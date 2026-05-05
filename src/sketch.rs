@@ -368,6 +368,7 @@ pub fn run_asymmetrical_assignment(
     // iterate over that and store the results 
     let dist = WeightedIndex::new(&weights).unwrap();
     let mut rng = rand::rng();
+    files.shuffle(& mut rng);
     for path in files.iter() {
         path.to_string();
         let idx = choices[dist.sample(&mut rng)] as usize;
