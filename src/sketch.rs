@@ -5,8 +5,15 @@ use sourmash::{signature::SigsTrait, sketch::minhash::KmerMinHash};
 use std::fs;
 use std::collections::HashMap;
 
-const TESTING_SEED : u64 = 101;
-// wrapper for sketching an entire fastQ file
+/// Seed used for all MinHash sketches.
+///
+/// A fixed seed ensures reproducible hashes across runs.
+const TESTING_SEED: u64 = 101;
+
+/// Sketch a single FASTQ file into a [`KmerMinHash`].
+///
+/// Reads every record in `path`, normalises the sequence, and adds it to a
+/// new MinHash sketch parameterised by `scaled` and `ksize`.
 pub fn sketch_file(path: &str, scaled: u32, ksize: u32) -> KmerMinHash {
     let mut mh: KmerMinHash = KmerMinHash::new(
         scaled, // scaled size
@@ -28,7 +35,10 @@ pub fn sketch_file(path: &str, scaled: u32, ksize: u32) -> KmerMinHash {
     mh
 }
 
-// Sketch all fastQ files in a directory
+/// Sketch every `.fastq` or `.fastq.gz` file in `fastq_dir`.
+///
+/// Returns one [`KmerMinHash`] per file in directory-iteration order.
+/// Files with other extensions are silently skipped.
 pub fn sketch_dir_files(
     fastq_dir: &str,
     scaled: u32,
@@ -49,7 +59,12 @@ pub fn sketch_dir_files(
     }
     sketches
 }
-// checks that a fastq file is not fully ambigious and has at least one read of the correct length
+
+/// Return `true` if `path` contains at least one valid k-mer of length `ksize`.
+///
+/// A k-mer is considered valid when it is fully unambiguous — i.e. it contains
+/// no `N` or `n` bases. Files where every read is shorter than `ksize` or
+/// entirely ambiguous return `false`.
 pub fn check_valid_fastq(path: &str, ksize: u32) -> bool {
     let mut reader = parse_fastx_file(path).expect("valid path/file");
     while let Some(record) = reader.next() {
@@ -65,7 +80,11 @@ pub fn check_valid_fastq(path: &str, ksize: u32) -> bool {
     }
     false // no valid lines
 }
-// check if all fatq files in a dir are valid
+
+/// Print the path of every invalid FASTQ file in `fastq_dir`.
+///
+/// A file is invalid if [`check_valid_fastq`] returns `false` for it at the
+/// given `ksize`. Files with other extensions are silently skipped.
 pub fn validate_fastq_dir(
     fastq_dir: &str,
     ksize: u32,
@@ -85,10 +104,12 @@ pub fn validate_fastq_dir(
             }
         }
     }
-    
 }
 
-// merge a vector of sketches into a single representation
+/// Merge a slice of sketches into a single [`KmerMinHash`].
+///
+/// All sketches must have been created with the same `scaled` and `ksize`
+/// values, which are also used to initialise the merged result.
 pub fn merge_sketches(
     sketches: &Vec<KmerMinHash>,
     scaled: u32,
@@ -101,24 +122,27 @@ pub fn merge_sketches(
     }
     merged
 }
-// super loose wrapper for getting sketch similarly, only here for the sake of completeness
+
+/// Return the Jaccard similarity between two sketches.
 pub fn compare_sketches(sketch_a: &KmerMinHash, sketch_b: &KmerMinHash) -> f64 {
     sketch_a.similarity(sketch_b, false, false).expect("error")
 }
 
-// write a sketch to a sig file
+/// Serialise a sketch to a `.sig` file at `path`.
 pub fn write_sketch(path: &str, sketch: &KmerMinHash) {
     let file = fs::File::create(path).unwrap(); // create, not open
     let mut writer = std::io::BufWriter::new(file);
     sketch.to_writer(&mut writer).expect("error");
 }
-// read a sketch from a sig file
+
+/// Deserialise a sketch from a `.sig` file at `path`.
 pub fn read_sketch(path: &str) -> KmerMinHash {
     let file = fs::File::open(path).unwrap();
     let reader = std::io::BufReader::new(file);
     KmerMinHash::from_reader(reader).expect("missing")
 }
 
+/// Read every `.sig` file in `sketches_dir` and return the sketches.
 pub fn read_sketches_from_dir(sketches_dir: &str) -> Vec<KmerMinHash> {
     let paths = fs::read_dir(sketches_dir).unwrap();
     let mut sketches: Vec<KmerMinHash> = Vec::new();
@@ -128,7 +152,11 @@ pub fn read_sketches_from_dir(sketches_dir: &str) -> Vec<KmerMinHash> {
     sketches
 }
 
-// make n initial sketches, just using a round-robin for load balancing
+/// Build `n` initial reference sketches from the FASTQ files in `fastq_dir`.
+///
+/// Files are assigned to partitions via round-robin, then each partition's
+/// sketch is written to `sig_dir` as `cluster_sketch_<i>.sig`. The sketches
+/// are also returned for immediate use.
 pub fn make_initial_sketch(
     fastq_dir: &str,
     n: u32,
@@ -167,6 +195,9 @@ pub fn make_initial_sketch(
     sketches
 }
 
+/// Write a slice of sketches to `dir` as `cluster_sketch_<i>.sig` files.
+///
+/// Creates `dir` if it does not already exist.
 pub fn write_sketches_to_dir(sketches: &Vec<KmerMinHash>, dir: &str) {
     println!("{dir}");
     fs::create_dir_all(dir).expect("could not create dir");
@@ -178,9 +209,17 @@ pub fn write_sketches_to_dir(sketches: &Vec<KmerMinHash>, dir: &str) {
     }
 }
 
+/// Assign incoming FASTQ files to cluster sketches using round-robin rotation.
+///
+/// Files in `incoming_dir` are sorted and then cycled across `cluster_sketches`
+/// by index. If `make_sketch` is `true`, each file is sketched and merged into
+/// its assigned cluster before the updated sketches are written to
+/// `final_sig_dir`. If `make_sketch` is `false`, only the directory is created.
+///
+/// Returns a map of filename → cluster index.
 pub fn run_round_robin(
     incoming_dir: &str,
-    make_sketch: bool, 
+    make_sketch: bool,
     mut cluster_sketches: Vec<KmerMinHash>,
     scaled: u32,
     ksize: u32,
@@ -219,8 +258,11 @@ pub fn run_round_robin(
     assignments
 }
 
-
-
+/// Find the cluster sketch most similar to a single FASTQ file.
+///
+/// Sketches `fastq_file_path` once, then compares it against every sketch in
+/// `sketches`. Returns a tuple of `(best_index, best_similarity, query_sketch)`.
+/// Similarity scores for each cluster are printed to stdout.
 pub fn select_most_similar_sketch(
     sketches: &Vec<KmerMinHash>,
     fastq_file_path: &str,
@@ -244,6 +286,14 @@ pub fn select_most_similar_sketch(
     most_similar
 }
 
+/// Assign incoming FASTQ files to cluster sketches by MinHash similarity.
+///
+/// Each file in `incoming_dir` is sketched and assigned to the most similar
+/// cluster via [`select_most_similar_sketch`]. The winning cluster's sketch is
+/// then updated by merging the new file's sketch into it, so later assignments
+/// reflect the growing clusters. Updated sketches are written to `final_sig_dir`.
+///
+/// Returns a map of filename → cluster index.
 pub fn run_similarity(
     incoming_dir: &str,
     mut cluster_sketches: Vec<KmerMinHash>,
@@ -265,7 +315,7 @@ pub fn run_similarity(
 
     for path in paths.iter(){
         let(best_idx, _, sketch) = select_most_similar_sketch(
-            &cluster_sketches, 
+            &cluster_sketches,
             path.to_str().unwrap(),
             scaled,
             ksize
@@ -278,6 +328,14 @@ pub fn run_similarity(
     assignments
 }
 
+/// Write an assignment map to a CSV file at `path`.
+///
+/// Entries are sorted by filename before writing. The output format is:
+/// ```text
+/// filename, cluster
+/// sample_a.fastq,0
+/// sample_b.fastq,2
+/// ```
 pub fn write_assignments(path: &str, assignments: &HashMap<String, usize>) {
     use std::io::Write;
 
@@ -291,6 +349,15 @@ pub fn write_assignments(path: &str, assignments: &HashMap<String, usize>) {
     }
 }
 
+/// Write a comparison of round-robin and similarity assignment counts to a CSV.
+///
+/// For each strategy, counts how many files were assigned to each cluster and
+/// writes one row per cluster. The output format is:
+/// ```text
+/// strategy, cluster, file_count
+/// round_robin,0,12
+/// similarity,0,9
+/// ```
 pub fn write_results(
     path: &str,
     round_robin: &HashMap<String, usize>,
@@ -319,11 +386,18 @@ pub fn write_results(
     }
 }
 
+/// Reassign files from an existing assignment CSV using weighted random sampling.
+///
+/// Reads `existing_assignment_file`, counts how many files were originally
+/// assigned to each cluster, then randomly reassigns all files using those
+/// counts as sampling weights. Files are shuffled before assignment to avoid
+/// ordering bias. The output directory `dir` is created if it does not exist.
+///
+/// Returns a map of filename → new cluster index.
 pub fn run_asymmetrical_assignment(
     existing_assignment_file: &str,
-    dir: &str
-
-)-> HashMap<String, usize>{
+    dir: &str,
+) -> HashMap<String, usize> {
     use std::fs::File;
     use std::collections::HashMap;
     use std::io::{self, BufRead};
@@ -332,10 +406,10 @@ pub fn run_asymmetrical_assignment(
     fs::create_dir_all(dir).expect("could not create dir");
     let file = File::open(existing_assignment_file);
     let reader = io::BufReader::new(file.expect("here"));
-    let mut files: Vec<String> = Vec::new(); 
-    let mut original_assignments: Vec<u128> = Vec::new(); 
+    let mut files: Vec<String> = Vec::new();
+    let mut original_assignments: Vec<u128> = Vec::new();
     for (i, line) in reader.lines().enumerate() {
-            // skip the first line 
+            // skip the first line
             if i == 0 {
                 continue;
             }
@@ -354,9 +428,9 @@ pub fn run_asymmetrical_assignment(
     }
     let mut m: HashMap<u128, usize> = HashMap::new();
     let mut choices: Vec<u128> = Vec::new();
-    let mut weights: Vec<usize> = Vec::new(); 
+    let mut weights: Vec<usize> = Vec::new();
     let mut assignments: HashMap<String, usize> = HashMap::new();
-    // get count of original files for weights
+    // count original assignments per cluster to use as sampling weights
     for x in original_assignments {
         *m.entry(x).or_default() += 1;
     }
@@ -364,8 +438,8 @@ pub fn run_asymmetrical_assignment(
         choices.push(x.0);
         weights.push(x.1)
     }
-    
-    // iterate over that and store the results 
+
+    // sample a cluster for each file using the weighted distribution
     let dist = WeightedIndex::new(&weights).unwrap();
     let mut rng = rand::rng();
     files.shuffle(& mut rng);
@@ -374,5 +448,5 @@ pub fn run_asymmetrical_assignment(
         let idx = choices[dist.sample(&mut rng)] as usize;
         assignments.insert(path.to_string(), idx);
     }
-    return  assignments;
+    return assignments;
 }
