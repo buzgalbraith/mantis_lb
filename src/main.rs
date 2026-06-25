@@ -61,6 +61,10 @@ enum Command {
         #[arg(long, default_value_t = String::from("initial_index"), short = 'o')]
         cluster_sketch_dir: String,
 
+        /// intermediate sketch dir //
+        #[arg(long, default_value_t = String::from("sketches"), short = 'i')]
+        intermediate_sketch_dir: String,
+
         /// Number of index partitions to create.
         #[arg(long, default_value_t = 5, short = 'n')]
         num_index: u32,
@@ -75,6 +79,9 @@ enum Command {
         /// thread count (t).
         #[arg(long, default_value_t = 4, short = 't' )]
         num_threads: usize,
+        /// Delete the intermediate sketch dir once sketches are merged.
+        #[arg(long, default_value_t = false, short = 'c')]
+        clean_intermediate: bool,
     },
 
 
@@ -123,6 +130,9 @@ enum Command {
         #[arg(long, default_value_t = String::from("initial_index"), short = 'd')]
         sig_dir: String,
 
+        /// intermediate sketch dir //
+        #[arg(long, default_value_t = String::from("sketches"), short = 'i')]
+        intermediate_sketch_dir: String,
         /// Output directory for updated sketches and the assignment CSV.
         #[arg(long, default_value_t = String::from("results/sim_final_sketches"), short = 'o')]
         output: String,
@@ -136,6 +146,9 @@ enum Command {
         /// thread count (t).
         #[arg(long, default_value_t = 4, short = 't' )]
         num_threads: usize,
+        /// Delete the intermediate sketch dir once sketches are merged.
+        #[arg(long, default_value_t = false, short = 'c')]
+        clean_intermediate: bool,
     },
 
     /// Redistribute samples from an existing assignment file weighted randomly.
@@ -181,7 +194,9 @@ enum Command {
         /// Directory containing the reference sketch index.
         #[arg(long, default_value_t = String::from("initial_index"), short = 'e')]
         sig_dir: String,
-
+        /// intermediate sketch dir //
+        #[arg(long, default_value_t = String::from("sketches"), short = 'i')]
+        intermediate_sketch_dir: String,
         /// Root output directory. Sub-directories are created automatically.
         #[arg(long, default_value_t = String::from("results"), short = 'o')]
         output_dir: String,
@@ -204,6 +219,9 @@ enum Command {
         /// thread count (t).
         #[arg(long, default_value_t = 4, short = 't' )]
         num_threads: usize,
+        /// Delete the intermediate sketch dir once sketches are merged.
+        #[arg(long, default_value_t = false, short = 'c')]
+        clean_intermediate: bool,
     },
 }
 
@@ -226,9 +244,9 @@ fn main() {
             let res = compare_sketches(&sketches[0], &sketches[1]);
             println!("similarity {}", res);
         }
-        Command::SketchInitialIndex {fastq_list, cluster_sketch_dir, num_index, scaled, ksize, num_threads } => {
+        Command::SketchInitialIndex {fastq_list, cluster_sketch_dir, intermediate_sketch_dir, num_index, scaled, ksize, num_threads, clean_intermediate } => {
             println!("Building index from {fastq_list} saving to {cluster_sketch_dir}");
-            sketch_initial_index(&fastq_list, num_index, scaled, ksize, &cluster_sketch_dir, num_threads);
+            sketch_initial_index(&fastq_list, &intermediate_sketch_dir, num_index, scaled, ksize, &cluster_sketch_dir, num_threads, clean_intermediate);
         }
         Command::ValidateFastqDir { fastq_dir, ksize } => {
             println!("Checking {fastq_dir} for invalid fastq files");
@@ -243,11 +261,11 @@ fn main() {
             write_assignments(&format!("{output}/round_robin_assignments.csv"), &assignments);
             println!("Done. Assignments written to {output}");
         }
-        Command::RunSimilarity { fatq_list, sig_dir, output , num_threads, scaled, ksize} => {
+        Command::RunSimilarity { fatq_list, sig_dir,intermediate_sketch_dir,  output , num_threads, scaled, ksize, clean_intermediate} => {
             println!("Running similarity assignment from {fatq_list}");
             let sketches = read_sketches_from_dir(&sig_dir);
             let assignments =
-                run_similarity(&fatq_list, sketches, scaled, ksize, num_threads,  &output) ;
+                run_similarity(&fatq_list, sketches, &intermediate_sketch_dir, scaled, ksize, num_threads,  &output, clean_intermediate) ;
             write_assignments(&format!("{output}/similarity_assignments.csv"), &assignments);
             println!("Done. Assignments written to {output}");
         }
@@ -257,7 +275,7 @@ fn main() {
             write_assignments(&format!("{output}/weighted_random_assignments.csv"), &assignments);
         }
         Command::RunExperiment {
-            incoming_dir, sig_dir, output_dir, scaled, ksize, num_index, make_sketch, num_threads
+            incoming_dir, sig_dir, intermediate_sketch_dir,  output_dir, scaled, ksize, num_index, make_sketch, num_threads, clean_intermediate
         } => {
             println!("Running full experiment from {incoming_dir}");
 
@@ -276,10 +294,12 @@ fn main() {
             let sim_assignments = run_similarity(
                 &incoming_dir,
                 sim_sketches,
-                scaled , 
-                ksize, 
+                &intermediate_sketch_dir,
+                scaled ,
+                ksize,
                 num_threads,
                 &format!("{output_dir}/sim_final_sketches"),
+                clean_intermediate,
             );
 
             fs::create_dir_all(&output_dir).unwrap();

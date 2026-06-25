@@ -4,7 +4,7 @@ use sourmash::prelude::ToWriter;
 use sourmash::{signature::SigsTrait, sketch::minhash::KmerMinHash};
 use std::fs;
 use std::io::BufRead;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::collections::HashMap;
 use rayon::prelude::*;
 use rand::prelude::*;
@@ -37,6 +37,22 @@ pub fn sketch_file(path: &str, scaled: u32, ksize: u32) -> KmerMinHash {
     }
     println!("Sketch  contains {} hashes", mh.size());
     mh
+}
+
+pub fn sketch_n_save(path: &str, sketch_dir: &str, scaled: u32, ksize: u32) -> String {
+    let stem = Path::new(path).file_prefix().and_then(|s| s.to_str()).expect("Missing file path");
+    let write_path = format!("{sketch_dir}/{stem}.sig");
+    // reuse a previously written sketch instead of recomputing it
+    if Path::new(&write_path).exists() {
+        println!("Using existing sketch {write_path}");
+        return write_path;
+    }
+    let sketch = sketch_file(path, scaled, ksize);
+    write_sketch(
+            &write_path,
+            &sketch,
+        );
+    return write_path
 }
 
 /// Sketch every `.fastq` or `.fastq.gz` file in `fastq_dir`.
@@ -146,6 +162,17 @@ pub fn read_sketch(path: &str) -> KmerMinHash {
     KmerMinHash::from_reader(reader).expect("missing")
 }
 
+/// Remove an intermediate sketch directory and all its contents.
+///
+/// Used to clean up the per-file `.sig` sketches once they have been merged
+/// into the cluster sketches and are no longer needed. No-op if the directory
+/// does not exist.
+pub fn clean_sketch_dir(sketch_dir: &str) {
+    if Path::new(sketch_dir).exists() {
+        fs::remove_dir_all(sketch_dir).expect("could not remove sketch dir");
+    }
+}
+
 /// Read every `.sig` file in `sketches_dir` and return the sketches.
 pub fn read_sketches_from_dir(sketches_dir: &str) -> Vec<KmerMinHash> {
     let paths = fs::read_dir(sketches_dir).unwrap();
@@ -155,40 +182,18 @@ pub fn read_sketches_from_dir(sketches_dir: &str) -> Vec<KmerMinHash> {
     }
     sketches
 }
-// sketch files in parallel 
-pub fn parallel_sketch_files(k: usize, 
-    fastq_list: &str, 
+/// Sketch every file in `fastq_list` in parallel, writing each sketch to
+/// `sketch_dir` as `<stem>.sig`.
+///
+/// Returns one `(sig_path, fastq_path)` pair per file. The sketches themselves
+/// are not held in memory — callers stream them back from disk via
+/// [`read_sketch`] one at a time, keeping peak memory bounded at large scale.
+pub fn parallel_sketch_files_with_names(k: usize,
+    fastq_list: &str,
+    sketch_dir: &str,
     scaled: u32,
     ksize: u32,
-    )->Vec<KmerMinHash>{
-    // k number of threads
-    // let files: Vec<PathBuf> = fs::read_dir(fastq_dir)
-    //     .unwrap()
-    //     .filter_map(|e| e.ok())
-    //     .map(|e| e.path())
-    //     .filter(|p| p.is_file())
-    //     .collect();
-    let files: Vec<PathBuf> = std::io::BufReader::new(std::fs::File::open(fastq_list).unwrap())
-        .lines()
-        .filter_map(|l| l.ok())
-        .map(|l| PathBuf::from(l.trim()))
-        .filter(|p| p.is_file())
-        .collect();
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(k)
-        .build()           // returns Result<ThreadPool>, not global
-        .unwrap();
-
-    pool.install(|| {
-        files.par_iter().map(|path| sketch_file(path.to_str().expect("missing"), scaled, ksize)).collect()
-    })
-}
-
-pub fn parallel_sketch_files_with_names(k: usize, 
-    fastq_list: &str, 
-    scaled: u32,
-    ksize: u32,
-    )->Vec<(KmerMinHash, PathBuf)>{
+    )->Vec<(String, PathBuf)>{
     // k number of threads
     let files: Vec<PathBuf> = std::io::BufReader::new(std::fs::File::open(fastq_list).unwrap())
         .lines()
@@ -196,6 +201,7 @@ pub fn parallel_sketch_files_with_names(k: usize,
         .map(|l| PathBuf::from(l.trim()))
         .filter(|p| p.is_file())
         .collect();
+    fs::create_dir_all(sketch_dir).expect("could not create dir");
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(k)
         .build()           // returns Result<ThreadPool>, not global
@@ -204,11 +210,25 @@ pub fn parallel_sketch_files_with_names(k: usize,
             files
                 .par_iter()
                 .map(|path| {
-                    let sketch = sketch_file(path.to_str().expect("missing"), scaled, ksize);
-                    (sketch, path.clone())
+                    let sig_path = sketch_n_save(path.to_str().expect("missing"), sketch_dir, scaled, ksize);
+                    (sig_path, path.clone())
                 })
-                .collect::<Vec<(KmerMinHash, PathBuf)>>()
+                .collect::<Vec<(String, PathBuf)>>()
         })
+}
+
+/// Sketch every file in `fastq_list` in parallel, returning only the `.sig`
+/// paths. Thin wrapper over [`parallel_sketch_files_with_names`].
+pub fn parallel_sketch_files(k: usize,
+    fastq_list: &str,
+    sketch_dir: &str,
+    scaled: u32,
+    ksize: u32,
+    )->Vec<String>{
+    parallel_sketch_files_with_names(k, fastq_list, sketch_dir, scaled, ksize)
+        .into_iter()
+        .map(|(sig_path, _)| sig_path)
+        .collect()
 }
 
 
@@ -219,11 +239,13 @@ pub fn parallel_sketch_files_with_names(k: usize,
 /// are also returned for immediate use.
 pub fn sketch_initial_index(
     fastq_list: &str,
+    sketch_dir: &str, 
     n: u32,
     scaled: u32,
     ksize: u32,
     sig_dir: &str,
     num_threads:usize  ,
+    clean_intermediate: bool,
 ) -> Vec<KmerMinHash> {
     let mut worker_sketches: Vec<KmerMinHash> = Vec::new();
     for _ in 0..n {
@@ -231,10 +253,16 @@ pub fn sketch_initial_index(
             KmerMinHash::new(scaled, ksize, HashFunctions::Murmur64Dna, TESTING_SEED, false, 0)
         );
     }
-    let sequence_sketches = parallel_sketch_files(num_threads, fastq_list, scaled, ksize);
-    for (i, sketch) in sequence_sketches.into_iter().enumerate() {
+    
+    let read_paths: Vec<String> = parallel_sketch_files(num_threads, fastq_list, sketch_dir, scaled, ksize);
+    for (i, read_path) in read_paths.into_iter().enumerate() {
         let idx: usize = i % n as usize;
+        let sketch = read_sketch(&read_path);
         worker_sketches[idx].merge(&sketch).unwrap();
+    }
+    // per-file sketches have all been merged into the clusters; drop them if asked
+    if clean_intermediate {
+        clean_sketch_dir(sketch_dir);
     }
     fs::create_dir_all(sig_dir).expect("could not create sig dir");
     // write out results
@@ -353,25 +381,31 @@ pub fn select_most_similar_sketch(
 pub fn run_similarity(
     fastq_list: &str,
     mut cluster_sketches: Vec<KmerMinHash>,
+    load_ballance_sketch_dir: &str,
     scaled: u32,
     ksize: u32,
     num_threads:usize,
     final_sig_dir: &str,
+    clean_intermediate: bool,
 ) -> HashMap<String, usize> {
     let mut assignments: HashMap<String, usize> = HashMap::new();
-    let new_sketches = parallel_sketch_files_with_names(num_threads, fastq_list, scaled, ksize);
-    for (new_sketch, path) in new_sketches.iter(){
-        // let new_sketch = read_sketch(path.to_str().expect("Missing"));
+    let new_sketches = parallel_sketch_files_with_names(num_threads, fastq_list, load_ballance_sketch_dir, scaled, ksize);
+    for (sig_path, path) in new_sketches.iter(){
+        // read one query sketch at a time so we never hold them all in memory
+        let new_sketch = read_sketch(sig_path);
         let(best_idx, _, sketch) = select_most_similar_sketch(
             &cluster_sketches,
-            new_sketch.clone()
-            
+            new_sketch
         );
         cluster_sketches[best_idx].merge(&sketch).unwrap();
         let base_name = path.file_prefix().unwrap().to_str().unwrap().to_string();
         assignments.insert(format!("{base_name}.fastq"), best_idx);
     }
     write_sketches_to_dir(&cluster_sketches, final_sig_dir);
+    // per-file sketches have all been merged into the clusters; drop them if asked
+    if clean_intermediate {
+        clean_sketch_dir(load_ballance_sketch_dir);
+    }
     assignments
 }
 
