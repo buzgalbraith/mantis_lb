@@ -20,9 +20,7 @@ export n_threads=16
 ## run method ## 
 export fastq_files_dir="${sra_dir}/fastq_files"
 export prefetch_files_dir="${sra_dir}/prefetch_files"
-export load_ballance_files_dir="${sra_dir}/load_ballance_fastq_files"
-export initial_index_files_dir="${sra_dir}/initial_index_fastq_files" 
-mkdir -p $fastq_files_dir  $initial_index_files_dir $load_ballance_files_dir $prefetch_files_dir
+mkdir -p $fastq_files_dir $prefetch_files_dir
 curl https://www.cs.cmu.edu/~ckingsf/software/bloomtree/srr-list.txt | awk '{print $2}' > ${sra_dir}/accessions.txt
 
 tail -n "$files_to_pull" ${sra_dir}/accessions.txt | while read acc; do
@@ -33,10 +31,4 @@ tail -n "$files_to_pull" ${sra_dir}/accessions.txt | while read acc; do
         --threads $n_threads \
         --split-files
 done
-
-echo "Saving initial index files to ${initial_index_files_dir}"
-ls $fastq_files_dir | head -n $initial_index_files | xargs -I {} mv $fastq_files_dir/{} $initial_index_files_dir/{}
-
-echo "Saving load ballance files to ${load_ballance_files_dir}"
-ls $fastq_files_dir | head -n $load_balance_files | xargs -I {} mv $fastq_files_dir/{} $load_ballance_files_dir/{}
 
