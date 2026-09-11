@@ -13,10 +13,17 @@ graph construction across large SRA datasets
 
 ## Reproduce results
 To reproduce the results run the following scripts. Be sure to change the run arguments at the top of each script as required.
+## Pulling data and set up
 1. Pull the data from SRA tools and split it into initial index and load balance files with `sbatch scripts/pull_data_from_sra.sh`
-1. Build sketches of the initial index `sbatch scripts/build_initial_sketch_clusters.sh`
-1. Do round-robin based cluster assignment `sbatch scripts/run_round_robin_cluster.sh` (this should only take a second)
-1. Do similarity based cluster assignment `sbatch scripts/run_similarity_cluster.sh`
-1. Use Squeakr to get CQFs for all files you want to load balance `sbatch scripts/squeaker_count_load_ballance.sh`
-1. Create the Mantis sub-indices with Round-robin assignment `sbatch scripts/build_mantis_index_round_robin.sh`
-1. Create the Mantis sub-indices with similarity assignment `sbatch scripts/build_mantis_index_similarity.sh`
+1. Use Squeakr to build CQFs for all of FASTQ files `scripts/build_cqfs.sh`
+## Running experiments
+The bellow will need to be run for each experiment. Axis to chose are how many worker nodes to have, have many files to distribute and how many files to use in the initial index
+1. Split the FASTQ files randomly by sample ID into initial index and files to distribute. Run `bash scripts/split_sample_ids.sh`
+1. Build sketches of the initial worker content `sbatch scripts/build_initial_worker_sketches.sh`
+1. Distribute the files using each load balancing method `sbatch scripts/run_load_ballance.sh`
+1. Merge the initial worker index assignment with the load balancing index assignment `bash scripts/concat_index_assigment.sh`
+1. Build the Mantis indexes `sbatch scripts/build_mantis_index.sh`. **note after this runs check the log to make sure all of the indexes built correctly**
+## Getting results ## 
+The bellow are some utility files i built for quickly gathering results
+1. Can gather raw results with `bash expirements/gather_results.sh <jid>` where `<jid>` is the job id of your mantis run
+1. Can generate a markdown table of mean and variance summary. `bash scripts/generate_markdown_results.sh> <exp> <mean>`  where `<exp>` indicates if the table should be across experiments (otherwise across workers), and `<mean>` denotes if we are looking at change in mean or variance
